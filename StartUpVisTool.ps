@@ -1,27 +1,3 @@
-
-# --- mixershortcut.Ink
-# Type: Program
-# Target: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -executionpolicy bypass -file C:\Temp\Lawo\StartUpVisTool.ps1 -vistoolconfig s1-sto
-# Start in: C:\WINDOWS\System32\WindowsPowerShell\v1.0
-# Start as: Minimized
-
-# ---- s1-sto.txt
-# location = Production
-# region = Stockholm
-# studio = Studio1
-# Project = s1-core-sto.vistool
-# OnAirProject = s1-core-sto.db3
-# ConnAdr1 = 192.168.1.150
-# ConnPrt1 = 18510
-# VSMPanelType = 59
-# StartPage = 2
-# autoSizeAdjust = false
-# StationId = 1
-# WindowRect = Rect(0 0 1280 1920s)
-# Snapshots = @@MixerUsers
-
-# ---- Add a new session "Session-1" to the "VisTool Session Management" software, so that the registry items is available
-
 # Used to determine the config file
 $global:configurationName = $env:COMPUTERNAME
 $global:debugRun = $false
