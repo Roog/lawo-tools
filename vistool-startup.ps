@@ -1,0 +1,164 @@
+
+# --- mixershortcut.Ink
+# Type: Program
+# Target: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -executionpolicy bypass -file C:\Temp\Lawo\StartUpVisTool.ps1 -vistoolconfig s1-sto
+# Start in: C:\WINDOWS\System32\WindowsPowerShell\v1.0
+# Start as: Minimized
+
+# ---- s1-sto.txt
+# location = Production
+# region = Stockholm
+# studio = Studio1
+# Project = s1-core-sto.vistool
+# OnAirProject = s1-core-sto.db3
+# ConnAdr1 = 192.168.1.150
+# ConnPrt1 = 18510
+# VSMPanelType = 59
+# StartPage = 2
+# autoSizeAdjust = false
+# StationId = 1
+# WindowRect = Rect(0 0 1280 1920s)
+# Snapshots = @@MixerUsers
+
+# ---- Add a new session "Session-1" to the "VisTool Session Management" software, so that the registry items is available
+
+# Used to determine the config file
+$global:configurationName = $env:COMPUTERNAME
+$global:debugRun = $false
+
+for ( $i = 0; $i -lt $args.count; $i++ ) {
+    if ($args[ $i ] -eq "/vistoolconfig") { $configurationName=$args[ $i+1 ] }
+    if ($args[ $i ] -eq "-vistoolconfig") { $configurationName=$args[ $i+1 ] }
+    if ($args[ $i ] -eq "/vc") { $configurationName=$args[ $i+1 ] }
+    if ($args[ $i ] -eq "-vc") { $configurationName=$args[ $i+1 ] }
+    if ($args[ $i ] -eq "/debug") { $debugRun=$true }
+    if ($args[ $i ] -eq "-debug") { $debugRun=$true }
+}
+
+function doMain() {
+    $ProgBar.Value = 10
+    $Window.Dispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::ContextIdle);
+
+    #---- Get settings file from Environment
+    $nada = xcopy "C:\Temp\Lawo\VisToolConfig\$configurationName.txt" "$env:ProgramData\VisTool\VisToolConfig\" /Y /Q
+    $settingFile = "$env:ProgramData\VisTool\VisToolConfig\$configurationName.txt"
+
+    $settingsStr = Get-Content $settingFile
+    foreach ($setStr in $settingsStr) {
+        if (!$setStr.Trim() -eq '') {
+            $setSplit = $setStr.Split("=")
+            $setKey = $setSplit[0].Trim()
+            $setValue = $setSplit[1].Trim()
+            Set-Item -Path "env:$setKey" -Value $setValue
+            Write-Output "$setKey = $setValue"
+        } else {
+    #        Write-Output "Empty row in settings"
+        }
+    }
+    $ProgBar.Value = 20
+    $Window.Dispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::ContextIdle);
+
+    #---- Shutdown any running VisTool to make sure there are only one instance
+    Stop-Process -Name VisToolMK2 -ErrorAction SilentlyContinue
+
+    $ProgBar.Value = 30
+    $Window.Dispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::ContextIdle);
+
+    #---- Copy files
+    $nada = xcopy "C:\Temp\Lawo\$env:location\$env:region\$env:studio\Deploy\*.*" "$env:ProgramData\VisTool\$env:location\$env:region\$env:studio\Deploy\*.*" /Y /D /Q
+            $ProgBar.Value = 40
+            $Window.Dispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::ContextIdle);
+    $nada = xcopy "C:\Temp\Lawo\$env:location\$env:region\$env:studio\Deploy\AppData\*.*" "$env:ProgramData\VisTool\$env:location\$env:region\$env:studio\Deploy\AppData\*.*" /Y /D /Q
+            $ProgBar.Value = 50
+            $Window.Dispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::ContextIdle);
+
+    #---- Adjust the registry
+    $prgFiles = $env:ProgramData.replace('\','/') # Wants front slash in paths
+    $ConnAdrPrd1 = $env:ConnAdr1
+    $ConnAdrPrd1 += ":$env:ConnPrt1" # Set address and port
+
+    # Set up DMS Admin service
+    Set-ItemProperty HKLM:\SOFTWARE\WOW6432Node\DSA\DMS\DMSINT\ -Name "CONN-ADR-1" -Value $ConnAdrPrd1
+    Set-ItemProperty HKLM:\SOFTWARE\WOW6432Node\DSA\DMS\DMSINT\ -Name  $env:ConnAdr1 -Value ""
+    Set-ItemProperty HKLM:\SOFTWARE\WOW6432Node\DSA\DMS\DMSINT\ -Name "DMS-TCP-PORT" -Value $env:ConnPrt1
+    $ProgBar.Value = 60
+    $Window.Dispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::ContextIdle);
+
+    # Set up session settings
+    Set-ItemProperty HKLM:\SOFTWARE\DSA\VisToolMk2\ -Name "Snapshots" -Value $env:Snapshots
+    Set-ItemProperty HKLM:\SOFTWARE\DSA\VisToolMk2\Session-1\ -Name "On-Air Project" -Value $env:OnAirProject
+	Set-ItemProperty HKLM:\SOFTWARE\DSA\VisToolMk2\Session-1\ -Name "ZirkonProject" -Value $env:OnAirProject
+    Set-ItemProperty HKLM:\SOFTWARE\DSA\VisToolMk2\Session-1\ -Name "On-Air Definition" -Value "$prgFiles/VisTool/$env:location/$env:region/$env:studio/Deploy/definition.mdb"
+	Set-ItemProperty HKLM:\SOFTWARE\DSA\VisToolMk2\Session-1\ -Name "ZirkonDefinition" -Value "$prgFiles/VisTool/$env:location/$env:region/$env:studio/Deploy/definition.mdb"
+    Set-ItemProperty HKLM:\SOFTWARE\DSA\VisToolMk2\Session-1\ -Name "Project" -Value "$prgFiles/VisTool/$env:location/$env:region/$env:studio/Deploy/$env:Project"
+    Set-ItemProperty HKLM:\SOFTWARE\DSA\VisToolMk2\Session-1\ -Name "StartPage" -Value $env:StartPage
+    Set-ItemProperty HKLM:\SOFTWARE\DSA\VisToolMk2\Session-1\ -Name "autoSizeAdjust" -Value $env:autoSizeAdjust
+    Set-ItemProperty HKLM:\SOFTWARE\DSA\VisToolMk2\Session-1\ -Name "StationId" -Value $env:StationId
+    Set-ItemProperty HKLM:\SOFTWARE\DSA\VisToolMk2\Session-1\ -Name "WindowRect" -Value $env:WindowRect
+    Set-ItemProperty HKLM:\SOFTWARE\DSA\VisToolMk2\Session-1\ -Name "VSM Panel Type" -Value $env:VSMPanelType
+    $ProgBar.Value = 70
+    $Window.Dispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::ContextIdle);
+
+    #---- Shutdown any running VisTool to make sure there are only one instance
+    Stop-Process -Name VisToolMK2 -ErrorAction SilentlyContinue
+    $ProgBar.Value = 80
+    $Window.Dispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::ContextIdle);
+
+    #---- Start VisTool
+    if ($debugRun) {
+        #---- Starting VisTool in debug mode
+        &"$env:ProgramFiles\VisToolMK2\VisToolMK2.exe" --inipath "$env:ProgramData\VisTool\$env:location\$env:region\$env:studio\Deploy\AppData" --feature "logic:logic2" -x -r Session-1 --remote-debugging-port=7777 --enable-logging --log-level=0
+    } else {
+        #---- Starting VisTool in normal mode
+        &"$env:ProgramFiles\VisToolMK2\VisToolMK2.exe" --inipath "$env:ProgramData\VisTool\$env:location\$env:region\$env:studio\Deploy\AppData" --feature "logic:logic2" -x -r Session-1
+    }
+}
+
+function defSplash() {
+    Add-Type -AssemblyName presentationframework, PresentationCore, WindowsBase
+
+[xml]$xaml = @"
+<Window
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    x:Name="Window" Title="Countdown" WindowStartupLocation="CenterScreen" WindowStyle="none" AllowsTransparency="True" ResizeMode="NoResize" Width="300" Height="200">
+        <Window.Background>
+            <ImageBrush ImageSource="C:\Temp\Lawo\background.png" ></ImageBrush>
+        </Window.Background>
+        <StackPanel>
+            <Label Content="Loading" x:Name="TopLabel" HorizontalAlignment="Center" VerticalAlignment="Top" Foreground="Black" FontWeight="Bold" FontSize="30" Padding="0,30,0,10" />
+            <Label Content="Mixer" x:Name="MixerLabel" HorizontalAlignment="Center" VerticalAlignment="Top" Foreground="Black" FontWeight="Bold" FontSize="40" Padding="0,10,0,10" />
+            <ProgressBar x:Name="ProgBar" HorizontalAlignment="Center" Height="20" VerticalAlignment="Bottom" Width="280"/>
+        </StackPanel>
+</Window>
+"@
+
+    $reader=(New-Object System.Xml.XmlNodeReader $xaml)
+    $Window=[Windows.Markup.XamlReader]::Load( $reader )
+
+    $Counter = $Window.FindName("Counter")
+    $TopLabel = $Window.FindName("TopLabel")
+    $MixerLabel = $Window.FindName("MixerLabel")
+    $ProgBar = $Window.FindName("ProgBar")
+
+    $MixerLabel.Content = $configurationName
+
+    $Window.Add_ContentRendered({
+        Countdown
+    })
+
+    function Countdown() {
+        doMain
+        $ProgBar.Value = 90
+        $Window.Dispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::ContextIdle);
+        Start-Sleep -Seconds 3
+        $ProgBar.Value = 100
+        $Window.Dispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::ContextIdle);
+        Start-Sleep -Seconds 4
+        $Window.Close()
+    }
+
+    $Window.ShowDialog()
+}
+
+defSplash
